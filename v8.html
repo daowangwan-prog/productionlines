@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>流水線輸送帶動畫v8</title>
+<style>
+  :root {
+    --primary: #2980b9;
+    --primary-hover: #1c5980;
+    --bg-color: #f4f6f9;
+    --panel-bg: #ffffff;
+    --text-main: #333333;
+    --text-muted: #666666;
+    --border-color: #e2e8f0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { 
+    background: var(--bg-color); 
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+    padding: 20px; 
+    color: var(--text-main);
+  }
+  .header { margin-bottom: 16px; display: flex; justify-content: space-between; align-items: flex-end; position: relative; min-height: 40px;}
+  .header h2 { font-size: 20px; color: #2c3e50; font-weight: bold; margin: 0; position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);}
+  .header p { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+  
+  .container { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; width: 80%; max-width: 1200px; margin: 0 auto;}
+  
+  .map-section {
+    background: var(--panel-bg);
+    padding: 16px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    border: 1px solid var(--border-color);
+  }
+  canvas { 
+    display: block; 
+    background: #fff; 
+    border-radius: 6px;
+    border: 1px solid #edf2f7;
+  }
+  
+  #legend { 
+    margin-top: 16px; display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: #555; max-width: 820px;
+  }
+  .li { display: flex; align-items: center; gap: 6px; background: #f8fafc; padding: 4px 8px; border-radius: 4px; border: 1px solid #f1f5f9; }
+  .lb { width: 14px; height: 14px; border: 2px solid; display: inline-block; flex-shrink: 0; }
+
+  .control-panel {
+    background: var(--panel-bg);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    border: 1px solid var(--border-color);
+    width: 320px;
+    flex-shrink: 0;
+  }
+  .control-panel h3 {
+    font-size: 15px; color: #2c3e50; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #edf2f7; display: flex; justify-content: space-between; align-items: center;
+  }
+  .setting-group { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 13px; }
+  .setting-group label { display: flex; align-items: center; gap: 8px; color: #4a5568; font-weight: 500; }
+  .setting-group input[type="number"] { width: 60px; padding: 4px 8px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 13px; text-align: center; outline: none; transition: border-color 0.2s;}
+  .setting-group input[type="number"]:focus { border-color: var(--primary); }
+  .setting-group input[type="range"] { width: 100px; cursor: pointer;}
+  
+  .actions { display: flex; gap: 10px; margin-top: 16px; padding-top: 16px; border-top: 2px solid #edf2f7;}
+  .btn { 
+    flex: 1; padding: 10px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; transition: all 0.2s;
+    background: #e2e8f0; color: #4a5568;
+  }
+  .btn:hover:not(:disabled) { background: #cbd5e0; }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  
+  .status-board { margin-top: 16px; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 12px; color: #4a5568;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h2>流水線輸送帶動畫引擎 v8</h2>
+  </div>
+</div>
+
+<div class="container">
+  <!-- 左側地圖 -->
+  <div class="map-section">
+    <canvas id="cvs"></canvas>
+    <div id="legend">
+      <div class="li"><div class="lb" style="border-color:#555;"></div>一般輸送帶</div>
+      <div class="li"><div class="lb" style="border-color:#aaa;border-style:dashed;border-radius:50%;"></div>旋轉輸送帶</div>
+      <div class="li"><div class="lb" style="border-color:#8B44AC;border-style:dashed;"></div>條碼黏貼區</div>
+      <div class="li"><div class="lb" style="border-color:#2ecc71;border-style:dashed;"></div>分流相機區</div>
+      <div class="li"><div class="lb" style="border-color:#e67e22;border-style:dashed;"></div>開/閉蓋作業區</div>
+      <div class="li"><div class="lb" style="border-color:#c0392b;"></div>A槍注液區</div>
+      <div class="li"><div class="lb" style="border-color:#27ae60;"></div>B槍注液區</div>
+      <div class="li"><div class="lb" style="border-color:#2980b9;"></div>C槍注液區</div>
+      <div class="li"><div class="lb" style="border-color:#4ab8d8;border-style:dashed;"></div>清洗區</div>
+      <div class="li"><div class="lb" style="border-color:#7B5B1E;border-style:dashed;"></div>抽液區</div>
+      <div class="li"><div class="lb" style="border-color:#d63685;border-style:dashed;"></div>成品等待區</div>
+      <div class="li"><div class="lb" style="border-color:#e8a020;"></div>儲存區</div>
+    </div>
+  </div>
+
+  <!-- 右側控制面板 -->
+  <div class="control-panel">
+    <h3>系統控制 <span>⚙️</span></h3>
+    
+    <div class="setting-group" style="background:#eef2f6; padding:8px; border-radius:6px; margin-bottom: 12px;">
+      <label style="color:#2c3e50; font-weight:bold;">A桶生成數量</label>
+      <input type="number" id="inp_count" value="10" min="1" max="90" style="font-weight:bold;">
+    </div>
+	
+	<div class="setting-group" style="background:#eef2f6; padding:8px; border-radius:6px; margin-bottom: 12px;">
+      <label style="color:#2c3e50; font-weight:bold;">B桶生成數量</label>
+      <input type="number" id="inp_count_b" value="0" min="1" max="90" style="font-weight:bold;" disabled>
+    </div>
+	
+	<div class="setting-group" style="background:#eef2f6; padding:8px; border-radius:6px; margin-bottom: 12px;">
+      <label style="color:#2c3e50; font-weight:bold;">C桶生成數量</label>
+      <input type="number" id="inp_count_c" value="0" min="1" max="90" style="font-weight:bold;" disabled>
+    </div>
+
+    <div class="setting-group" style="margin-bottom: 4px;">
+      <label>模擬倍速 (快轉)</label>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <input type="range" id="inp_speed" value="1" min="1" max="50">
+        <span id="speed_disp" style="width:30px; text-align:right; font-weight:bold; color:#2980b9;">1x</span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="btn_generate" class="btn">重置/生成</button>
+      <button id="btn_start" class="btn btn-primary" disabled>▶ 開始運行</button>
+    </div>
+
+    <div class="status-board" id="status_board">
+      系統待命中... 請先點擊「生成」。
+    </div>
+
+    <h3 style="margin-top:20px;">各節點停留秒數 <span>⏱️</span></h3>
+    <div class="setting-group"><label>一般輸送帶</label><input type="number" id="time_normal" value="8" min="0"></div>
+    <div class="setting-group"><label>旋轉輸送帶</label><input type="number" id="time_rotate" value="14" min="0"></div>
+    <div class="setting-group"><label>條碼黏貼區</label><input type="number" id="time_purple" value="13" min="0"></div>
+    <div class="setting-group"><label>分流相機區</label><input type="number" id="time_green" value="8" min="0"></div>
+    <div class="setting-group"><label>開/閉蓋作業區</label><input type="number" id="time_orange" value="10" min="0"></div>
+    <div class="setting-group"><label>A槍注液區</label><input type="number" id="time_A" value="10" min="0"></div>
+    <div class="setting-group"><label>B槍注液區</label><input type="number" id="time_B" value="10" min="0"></div>
+    <div class="setting-group"><label>C槍注液區</label><input type="number" id="time_C" value="10" min="0"></div>
+    <div class="setting-group"><label>清洗區</label><input type="number" id="time_blue" value="10" min="0"></div>
+    <div class="setting-group"><label>抽液區</label><input type="number" id="time_brown" value="10" min="0"></div>
+    <div class="setting-group"><label>成品等待區</label><input type="number" id="time_pink" value="13" min="0"></div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// CONFIGURATION & STATE
+// ================================================================
+const DwellTimes = {
+  rotate: 14, orange_dashed: 10, A_label: 10, B_label: 10, C_label: 10,
+  blue_dashed: 10, brown_dashed: 10, pink_dashed: 13, purple_dashed: 13,
+  green_dashed: 8, normal: 8, arrow_right: 8, arrow_left: 8, storage: 0
+};
+
+const inputMapping = {
+  'normal': 'normal', 'rotate': 'rotate', 'purple': 'purple_dashed',
+  'green': 'green_dashed', 'orange': 'orange_dashed', 'A': 'A_label',
+  'B': 'B_label', 'C': 'C_label', 'blue': 'blue_dashed',
+  'brown': 'brown_dashed', 'pink': 'pink_dashed'
+};
+
+Object.keys(inputMapping).forEach(prefix => {
+  const el = document.getElementById('time_' + prefix);
+  if(el) {
+    el.addEventListener('change', (e) => {
+      DwellTimes[inputMapping[prefix]] = Number(e.target.value);
+    });
+  }
+});
+
+let simSpeed = 1;
+document.getElementById('inp_speed').addEventListener('input', (e) => {
+  simSpeed = Number(e.target.value);
+  document.getElementById('speed_disp').innerText = simSpeed + 'x';
+});
+
+let running = false;
+let balls = [];
+let lastTime = 0;
+let rafId = null;
+
+// 同步鎖 (Global Locks)
+let globalUnlock50 = false;
+let globalUnlock69 = false;
+let globalUnlock87 = false;
+
+// ================================================================
+// MAP DATA & SETUP
+// ================================================================
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const CS = 32;
+const OX = 26, OY = 26;
+cvs.width  = OX + 23 * CS + 6;
+cvs.height = OY + 22 * CS + 6;
+
+const CELLS = {};
+function set(x, y, t) { CELLS[`${x},${y}`] = t || 'normal'; }
+
+// Top row
+for (let x=0; x<=17; x++) set(x,0,'normal');
+set(0,0,'rotate'); set(3,0,'rotate'); set(6,0,'rotate'); set(9,0,'rotate'); set(12,0,'rotate');
+set(13,0,'pink_dashed'); set(14,0,'pink_dashed'); set(17,0,'arrow_right');
+
+// Columns
+for (let y=0; y<=21; y++) set(0,y,'normal');
+set(0,0,'rotate'); set(0,1,'orange_dashed'); set(0,2,'A_label'); set(0,3,'orange_dashed'); set(0,21,'rotate');
+
+// Branch Cells (橫向連通管)
+set(1,4,'normal'); set(2,4,'normal');
+set(4,5,'normal'); set(5,5,'normal');
+set(7,9,'normal'); set(8,9,'normal');
+
+for (let y=0; y<=21; y++) set(3,y,'normal');
+set(3,0,'rotate'); set(3,1,'orange_dashed'); set(3,2,'B_label'); set(3,3,'orange_dashed'); set(3,4,'rotate'); set(3,21,'rotate');
+
+for (let y=0; y<=21; y++) set(6,y,'normal');
+set(6,0,'rotate'); set(6,1,'orange_dashed'); set(6,2,'C_label'); set(6,3,'orange_dashed'); set(6,5,'rotate'); set(6,21,'rotate');
+
+for (let y=0; y<=21; y++) set(9,y,'normal');
+set(9,0,'rotate'); set(9,3,'blue_dashed'); set(9,4,'blue_dashed'); set(9,5,'blue_dashed'); set(9,6,'blue_dashed'); set(9,8,'brown_dashed'); set(9,9,'rotate'); set(9,21,'rotate');
+
+for (let y=0; y<=21; y++) set(12,y,'normal');
+set(12,0,'rotate'); set(12,3,'blue_dashed'); set(12,4,'blue_dashed'); set(12,5,'blue_dashed'); set(12,6,'blue_dashed'); set(12,8,'brown_dashed'); set(12,21,'rotate');
+
+for (let y=0; y<=21; y++) set(17,y,'normal');
+set(17,0,'arrow_right'); set(17,21,'arrow_left');
+
+// Bottom row
+for (let x=0; x<=17; x++) if (!CELLS[`${x},21`]) set(x,21,'normal');
+set(0,21,'rotate'); set(3,21,'rotate'); set(6,21,'rotate'); set(7,21,'green_dashed'); set(9,21,'rotate'); set(12,21,'rotate'); set(13,21,'purple_dashed'); set(14,21,'purple_dashed'); set(17,21,'arrow_left');
+
+// Storage
+for (let y=0; y<=21; y++) for (let x=18; x<=22; x++) set(x,y,'storage');
+
+function cc(x,y) { return [OX + x*CS + CS/2, OY + y*CS + CS/2]; }
+
+// ================================================================
+// ALGORITHM LOGIC (Funneling & Synchronized Locks)
+// ================================================================
+function getStorageCell(idx) {
+  let row = Math.floor(idx / 5);
+  let colOffset = idx % 5;
+  let y = 21 - row;
+  let x = (row % 2 === 0) ? 18 + colOffset : 22 - colOffset;
+  return {x, y};
+}
+
+function getFinishedStorageCell(idx) {
+  let row = Math.floor(idx / 5);
+  let colOffset = idx % 5;
+  let y = row;
+  let x = (row % 2 === 0) ? 18 + colOffset : 22 - colOffset;
+  return {x, y};
+}
+
+function getBallAt(x, y) {
+  return balls.find(b => {
+    if (b.state === 'MOVING') return b.targetX === x && b.targetY === y;
+    return b.x === x && b.y === y;
+  });
+}
+
+function getNextCell(b) {
+  if (b.storageIdx >= 0) {
+    if (b.storageIdx > 0) return getStorageCell(b.storageIdx - 1);
+    return {x: 17, y: 21};
+  }
+
+  if (b.finishedIdx >= 0) {
+    if (b.finishedIdx < b.targetStorageIdx) return getFinishedStorageCell(b.finishedIdx + 1);
+    return null;
+  }
+
+  let x = b.x, y = b.y;
+
+  // 1. 底層運輸區 (左行) 與 梯隊分流點
+  if (y === 21 && x > 0 && x <= 17) {
+    if (b.id >= 87 && x === 9) return {x: 9, y: 20};
+    if (b.id >= 69 && b.id <= 86 && x === 6) return {x: 6, y: 20};
+    if (b.id >= 50 && b.id <= 68 && x === 3) return {x: 3, y: 20};
+    if (x === 0) return {x: 0, y: 20}; // 第一梯隊及其他
+    return {x: x - 1, y: 21};
+  }
+
+  // 2. 梯隊四 (ID 87~90) 上行與匯流漏斗
+  if (x === 9 && y > 9 && y <= 20) return {x: 9, y: y - 1};
+  if (x === 9 && y === 9) return {x: 8, y: 9};
+  if (x === 8 && y === 9) return {x: 7, y: 9};
+  if (x === 7 && y === 9) {
+    if (!globalUnlock87) return null; // 鎖定狀態：等待 86號到 (6,8)
+    return {x: 6, y: 9};
+  }
+
+  // 3. 梯隊三 (ID 69~86) 上行與匯流漏斗 (含匯流後的梯隊四)
+  if (x === 6 && y > 5 && y <= 20) return {x: 6, y: y - 1};
+  if (x === 6 && y === 5) return {x: 5, y: 5};
+  if (x === 5 && y === 5) return {x: 4, y: 5};
+  if (x === 4 && y === 5) {
+    if (!globalUnlock69) return null; // 鎖定狀態：等待 68號到 (3,4)
+    return {x: 3, y: 5};
+  }
+
+  // 4. 梯隊二 (ID 50~68) 上行與匯流漏斗 (含匯流後的梯隊三/四)
+  if (x === 3 && y > 4 && y <= 20) return {x: 3, y: y - 1};
+  if (x === 3 && y === 4) return {x: 2, y: 4};
+  if (x === 2 && y === 4) return {x: 1, y: 4};
+  if (x === 1 && y === 4) {
+    if (!globalUnlock50) return null; // 鎖定狀態：等待 49號到 (0,3)
+    return {x: 0, y: 4};
+  }
+
+  // 5. 梯隊一 (主幹線 x=0, 含所有匯流後的球)
+  if (x === 0 && y > 0 && y <= 21) return {x: 0, y: y - 1};
+
+  // 6. 頂部運輸 (含入口防撞雷達)
+  if (y === 0 && x >= 0 && x < 12) {
+    if (x === 11) {
+      if (getBallAt(12, 2) || getBallAt(12, 3) || getBallAt(12, 7)) return null;
+    }
+    return {x: x + 1, y: 0};
+  }
+
+  // 7. 命運的十字路口 (12,0)
+  if (x === 12 && y === 0) {
+    if (b.laps < 3) return {x: 12, y: 1};
+    else return {x: 13, y: 0};
+  }
+
+  // 8. 清洗區下降 (x=12)
+  if (x === 12 && y > 0 && y < 21) return {x: 12, y: y + 1};
+
+  // 9. 入庫運輸
+  if (y === 0 && x >= 13 && x < 18) {
+    if (x === 17) return {x: 18, y: 0};
+    return {x: x + 1, y: 0};
+  }
+
+  return null;
+}
+
+// ================================================================
+// SYSTEM ENGINE
+// ================================================================
+function generateBalls(count) {
+  balls = [];
+  globalUnlock50 = false;
+  globalUnlock69 = false;
+  globalUnlock87 = false;
+
+  for(let i = 0; i < count; i++) {
+    let pos = getStorageCell(i);
+    let center = cc(pos.x, pos.y);
+    balls.push({
+      id: i + 1,        
+      x: pos.x, y: pos.y,
+      px: center[0], py: center[1],
+      state: 'DWELLING',
+      dwellTimer: 0,    
+      laps: 0,
+      storageIdx: i,
+      finishedIdx: -1, targetStorageIdx: -1,
+      targetX: -1, targetY: -1,
+      srcPx: 0, srcPy: 0, tgtPx: 0, tgtPy: 0,
+      animProg: 0
+    });
+  }
+}
+
+function update(time) {
+  if (!lastTime) lastTime = time;
+  let dt = (time - lastTime) / 1000;
+  lastTime = time;
+
+  if (running) {
+    balls.sort((a,b) => {
+      if (b.laps !== a.laps) return b.laps - a.laps; 
+      return a.id - b.id; 
+    });
+
+    for (let b of balls) {
+      if (b.state === 'DONE') continue;
+
+      if (b.state === 'DWELLING') {
+        b.dwellTimer -= dt * simSpeed;
+        if (b.dwellTimer <= 0) b.state = 'WAITING';
+      }
+
+      if (b.state === 'WAITING') {
+        let next = getNextCell(b);
+        if (next) {
+          let occupant = getBallAt(next.x, next.y);
+
+          // 倉儲推擠演算法
+          if (occupant && occupant.finishedIdx >= 0 && occupant.state === 'DONE' && b.x === 17 && b.y === 0 && next.x === 18 && next.y === 0) {
+            balls.forEach(other => {
+              if (other.finishedIdx >= 0) {
+                other.targetStorageIdx++;
+                other.state = 'WAITING';
+              }
+            });
+            continue;
+          }
+
+          if (!occupant) {
+            b.targetX = next.x; b.targetY = next.y;
+            let center = cc(next.x, next.y);
+            b.srcPx = b.px; b.srcPy = b.py;
+            b.tgtPx = center[0]; b.tgtPy = center[1];
+            b.animProg = 0;
+            b.state = 'MOVING';
+          }
+        }
+      }
+
+      if (b.state === 'MOVING') {
+        let moveTime = 0.4 / simSpeed; 
+        b.animProg += dt / moveTime;
+        if (b.animProg >= 1) b.animProg = 1;
+
+        b.px = b.srcPx + (b.tgtPx - b.srcPx) * b.animProg;
+        b.py = b.srcPy + (b.tgtPy - b.srcPy) * b.animProg;
+
+        if (b.animProg >= 1) {
+          b.x = b.targetX; b.y = b.targetY;
+          b.targetX = -1; b.targetY = -1;
+
+          // 【關鍵解鎖事件偵測】
+          if (b.x === 0 && b.y === 3 && b.id === 49) globalUnlock50 = true;
+          if (b.x === 3 && b.y === 4 && b.id === 68) globalUnlock69 = true;
+          if (b.x === 6 && b.y === 8 && b.id === 86) globalUnlock87 = true;
+
+          // 圈數計算點
+          if (b.x === 0 && b.y === 2) b.laps++;
+
+          if (b.storageIdx >= 0) {
+            if (b.x === 17 && b.y === 21) b.storageIdx = -1;
+            else b.storageIdx--;
+          }
+
+          if (b.x === 18 && b.y === 0 && b.finishedIdx === -1) {
+            b.finishedIdx = 0;
+            b.targetStorageIdx = 0; 
+          } else if (b.finishedIdx >= 0 && b.finishedIdx < b.targetStorageIdx) {
+            b.finishedIdx++;
+          }
+
+          if (b.finishedIdx >= 0 && b.finishedIdx === b.targetStorageIdx) {
+            b.state = 'DONE';
+          } else {
+            b.state = 'DWELLING';
+            let cellType = CELLS[`${b.x},${b.y}`] || 'normal';
+            if(cellType.startsWith('arrow')) cellType = 'normal';
+            let t = DwellTimes[cellType] !== undefined ? DwellTimes[cellType] : 8;
+            b.dwellTimer = t; 
+          }
+        }
+      }
+    }
+  }
+
+  drawMap();
+  drawBalls();
+  
+  if (running) {
+    let completed = balls.filter(b => b.state === 'DONE' && b.finishedIdx >= 0).length;
+    let lockStatus = `🔐鎖狀態: 50(${globalUnlock50?'開':'鎖'}) 69(${globalUnlock69?'開':'鎖'}) 87(${globalUnlock87?'開':'鎖'})`;
+    document.getElementById('status_board').innerHTML = 
+      `運行中... 總數: ${balls.length} | 已入庫: <span style="color:var(--primary);font-weight:bold;">${completed}</span>`;
+  }
+
+  rafId = requestAnimationFrame(update);
+}
+
+// ================================================================
+// DRAWING
+// ================================================================
+function drawRect(x,y,w,h,fill,stroke,lw,dash) {
+  ctx.fillStyle=fill; ctx.fillRect(x,y,w,h);
+  if(stroke) {
+    ctx.strokeStyle=stroke; ctx.lineWidth=lw||1;
+    ctx.setLineDash(dash||[]);
+    ctx.strokeRect(x+0.5, y+0.5, w-1, h-1);
+    ctx.setLineDash([]);
+  }
+}
+
+function drawMap() {
+  ctx.clearRect(0,0,cvs.width,cvs.height);
+  
+  for (let key in CELLS) {
+    let [x, y] = key.split(',').map(Number);
+    let px = OX + x*CS, py = OY + y*CS;
+    let t = CELLS[key];
+    
+    drawRect(px, py, CS, CS, '#fff', '#eee', 1);
+
+    if (t === 'storage') drawRect(px, py, CS, CS, '#fffce8', '#e8a020', 1);
+    else if (t === 'normal' || t.startsWith('arrow')) drawRect(px, py, CS, CS, '#ffffff', '#555', 1);
+    else if (t === 'rotate') {
+      drawRect(px, py, CS, CS, '#ffffff', '#555', 0.7);
+      ctx.beginPath(); ctx.arc(px+CS/2, py+CS/2, CS/2-5, 0, Math.PI*2);
+      ctx.strokeStyle='#aaa'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]); ctx.stroke(); ctx.setLineDash([]);
+    } else {
+      let bd, bg;
+      if(t==='A_label') {bd='#c0392b'; bg='#fff8f8';}
+      else if(t==='B_label') {bd='#27ae60'; bg='#f0fff8';}
+      else if(t==='C_label') {bd='#2980b9'; bg='#f0f8ff';}
+      else if(t==='orange_dashed') {bd='#e67e22'; bg='#fffbe6';}
+      else if(t==='blue_dashed') {bd='#4ab8d8'; bg='#eef9ff';}
+      else if(t==='brown_dashed') {bd='#7B5B1E'; bg='#fdf5e6';}
+      else if(t==='pink_dashed') {bd='#d63685'; bg='#fff0f8';}
+      else if(t==='purple_dashed') {bd='#8B44AC'; bg='#faf0ff';}
+      else if(t==='green_dashed') {bd='#2ecc71'; bg='#f0fff4';}
+
+      drawRect(px, py, CS, CS, bg, '#bbb', 0.5);
+      if(t.includes('label')) {
+        drawRect(px+2, py+2, CS-4, CS-4, 'transparent', bd, 2.5);
+        ctx.fillStyle=bd; ctx.font='bold 15px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(t.charAt(0), px+CS/2, py+CS/2);
+      } else {
+        drawRect(px+3, py+3, CS-6, CS-6, 'transparent', bd, 2, [4,3]);
+      }
+    }
+    
+    if (t==='arrow_right' || t==='arrow_left') {
+      ctx.fillStyle='#cc44aa'; ctx.font='bold 17px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(t==='arrow_right'?'→':'←', px+CS/2, py+CS/2);
+    }
+  }
+
+  ctx.strokeStyle='#e8a020'; ctx.lineWidth=2.5;
+  ctx.strokeRect(OX+18*CS+0.5, OY+0.5, 5*CS-1, 22*CS-1);
+}
+
+function drawBalls() {
+  for (let b of balls) {
+    ctx.beginPath();
+    ctx.arc(b.px, b.py, 13, 0, Math.PI*2);
+    ctx.fillStyle = b.finishedIdx >= 0 ? '#e2e8f0' : '#ffd6d6';
+    ctx.fill();
+    ctx.strokeStyle = b.finishedIdx >= 0 ? '#94a3b8' : '#c64c40';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = b.finishedIdx >= 0 ? '#64748b' : '#c64c40';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(b.id, b.px, b.py);
+
+    if (b.finishedIdx === -1 && b.storageIdx === -1) {
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.arc(b.px - 7 + i*7, b.py + 13 + 4, 2.5, 0, Math.PI*2);
+        ctx.fillStyle = i < b.laps ? '#c64c40' : '#cbd5e0';
+        ctx.fill();
+      }
+    }
+  }
+}
+
+// ================================================================
+// UI BINDINGS
+// ================================================================
+document.getElementById('btn_generate').addEventListener('click', () => {
+  let count = Number(document.getElementById('inp_count').value);
+  if(count < 1) count = 1; if(count > 90) count = 90;
+  document.getElementById('inp_count').value = count;
+  
+  running = false;
+  document.getElementById('btn_start').disabled = false;
+  document.getElementById('btn_start').innerText = '▶ 開始運行';
+  document.getElementById('status_board').innerText = `已生成 ${count} 顆球體！請點擊開始。`;
+  
+  generateBalls(count);
+  drawMap();
+  drawBalls();
+});
+
+document.getElementById('btn_start').addEventListener('click', () => {
+  if(balls.length === 0) return;
+  running = !running;
+  
+  if(running) {
+    document.getElementById('btn_start').innerText = '⏸ 暫停運行';
+    document.getElementById('btn_start').style.background = '#e67e22';
+  } else {
+    document.getElementById('btn_start').innerText = '▶ 繼續運行';
+    document.getElementById('btn_start').style.background = 'var(--primary)';
+    document.getElementById('status_board').innerText = '系統已暫停。';
+  }
+});
+
+drawMap();
+rafId = requestAnimationFrame(update);
+</script>
+</body>
+</html>
