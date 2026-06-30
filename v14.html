@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>流水線輸送帶動畫 v14</title>
+<style>
+  /* ================================================================
+     CSS 變數與全域設定：定義色彩計畫與基礎字體
+     ================================================================ */
+  :root {
+    --primary: #2980b9;       /* 主要按鈕與強調顏色 */
+    --primary-hover: #1c5980; /* 按鈕懸停顏色 */
+    --bg-color: #f4f6f9;      /* 頁面背景色 */
+    --panel-bg: #ffffff;      /* 面板背景色 */
+    --text-main: #333333;     /* 主要文字顏色 */
+    --text-muted: #666666;    /* 次要文字顏色 */
+    --border-color: #e2e8f0;  /* 邊框顏色 */
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { 
+    background: var(--bg-color); 
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+    padding: 20px; 
+    color: var(--text-main);
+  }
+  
+  /* 標題區塊樣式 */
+  .header { margin-bottom: 16px; display: flex; justify-content: space-between; align-items: flex-end;}
+  .header h2 { font-size: 20px; color: #2c3e50; font-weight: bold;}
+  .header p { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+  /* 主要容器：使用 Flexbox 讓左側地圖與右側面板並排或換行 */  
+  .container { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; width: 100%; max-width: 1300px; margin: 0 auto;}
+
+  /* 左側畫布區塊樣式 */  
+  .map-section {
+    background: var(--panel-bg);
+    padding: 16px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    border: 1px solid var(--border-color);
+  }
+  canvas { 
+    display: block; 
+    background: #fff; 
+    border-radius: 6px;
+    border: 1px solid #edf2f7;
+  }
+
+  /* 圖例區塊樣式 */  
+  #legend { 
+    margin-top: 16px; display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: #555; max-width: 680px;
+  }
+  .li { display: flex; align-items: center; gap: 6px; background: #f8fafc; padding: 4px 8px; border-radius: 4px; border: 1px solid #f1f5f9; }
+  .lb { width: 14px; height: 14px; border: 2px solid; display: inline-block; flex-shrink: 0; }
+
+  /* 右側控制面板樣式 */
+  .control-panel {
+    background: var(--panel-bg);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    border: 1px solid var(--border-color);
+    width: 320px;
+    flex-shrink: 0;
+  }
+  .control-panel h3 {
+    font-size: 15px; color: #2c3e50; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #edf2f7; display: flex; justify-content: space-between; align-items: center;
+  }
+  
+  .EC-time h4 {
+    font-size: 15px;
+	color: #2c3e50;
+	margin-bottom: 10px;
+  }
+  
+  /* 設定群組 (例如：輸入框、滑桿) */  
+  .setting-group { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 13px; }
+  .setting-group label { display: flex; align-items: center; gap: 8px; color: #4a5568; font-weight: 500; }
+  .setting-group input[type="number"] { width: 60px; padding: 4px 8px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 13px; text-align: center; outline: none; transition: border-color 0.2s;}
+  .setting-group input[type="number"]:focus { border-color: var(--primary); }
+  .setting-group input[type="range"] { width: 100px; cursor: pointer;}
+
+  /* 按鈕樣式 */  
+  .actions { display: flex; gap: 10px; margin-top: 16px; padding-top: 16px; border-top: 2px solid #edf2f7;}
+  .btn { 
+    flex: 1; padding: 10px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; transition: all 0.2s;
+    background: #e2e8f0; color: #4a5568;
+  }
+  .btn:hover:not(:disabled) { background: #cbd5e0; }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* 狀態看板 */  
+  .status-board { margin-top: 16px; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 12px; color: #4a5568;}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- 左側地圖 -->
+  <div class="map-section">
+    <canvas id="cvs"></canvas>
+    <div id="legend">
+      <div class="li"><div class="lb" style="border-color:#555;"></div>一般輸送帶</div>
+      <div class="li"><div class="lb" style="border-color:#aaa;border-style:dashed;border-radius:50%;"></div>旋轉輸送帶</div>
+      <div class="li"><div class="lb" style="border-color:#8B44AC;border-style:dashed;"></div>條碼黏貼區</div>
+      <div class="li"><div class="lb" style="border-color:#2ecc71;border-style:dashed;"></div>分流相機區</div>
+      <div class="li"><div class="lb" style="border-color:#e67e22;border-style:dashed;"></div>開/閉蓋作業區</div>
+      <div class="li"><div class="lb" style="border-color:#c0392b; background-color:#fff8f8;"></div>A槍注液區</div>
+      <div class="li"><div class="lb" style="border-color:#5b00ae; background-color:#faf4ff;"></div>B槍注液區</div>
+      <div class="li"><div class="lb" style="border-color:#2980b9; background-color:#f0f8ff;"></div>C槍注液區</div>
+      <div class="li"><div class="lb" style="border-color:#4ab8d8;border-style:dashed;"></div>清洗區</div>
+      <div class="li"><div class="lb" style="border-color:#7B5B1E;border-style:dashed;"></div>抽液區</div>
+      <div class="li"><div class="lb" style="border-color:#d63685;border-style:dashed;"></div>成品等待區</div>
+    </div>
+  </div>
+
+  <!-- 右側控制面板 -->
+  <div class="control-panel">
+    <h3>系統控制 <span>⚙️</span></h3>
+    
+    <div class="setting-group" style="background:#fff8f8; padding:8px; border-radius:6px; margin-bottom: 4px; border:1px solid #ffcccc;">
+      <label style="color:#c64c40; font-weight:bold;">A桶生成數量</label>
+      <input type="number" id="inp_count_A" value="20" min="0" max="90" style="font-weight:bold; border-color:#ffcccc;">
+    </div>
+    
+    <div class="setting-group" style="background:#faf0ff; padding:8px; border-radius:6px; margin-bottom: 12px; border:1px solid #e49edd;">
+      <label style="color:#a02b93; font-weight:bold;">B桶生成數量</label>
+      <input type="number" id="inp_count_B" value="15" min="0" max="90" style="font-weight:bold; border-color:#e49edd;">
+    </div>
+    
+    <div class="setting-group" style="margin-bottom: 4px;">
+      <label>模擬倍速 (快轉)</label>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <input type="range" id="inp_speed" value="1" min="1" max="100">
+        <span id="speed_disp" style="width:30px; text-align:right; font-weight:bold; color:#2980b9;">1x</span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="btn_generate" class="btn">重置/生成</button>
+      <button id="btn_start" class="btn btn-primary" disabled>▶ 開始運行</button>
+    </div>
+
+    <div class="status-board" id="status_board">
+      系統待命中... 請先點擊「生成」。
+    </div>
+
+	<div class="EC-time">
+	<br>
+		<h4>A桶預計完成時間：</h4>
+		<h4>B桶預計完成時間：</h4>
+	</div>
+
+    <h3 style="margin-top:20px;">各節點停留秒數 <span>⏱️</span></h3>
+    <div class="setting-group"><label><div class="lb" style="border-color:#555;"></div>一般輸送帶</label><input type="number" id="time_normal" value="8" min="0"></div>
+    <div class="setting-group"><label><div class="lb" style="border-color:#aaa;border-style:dashed;border-radius:50%;"></div>旋轉輸送帶</label><input type="number" id="time_rotate" value="14" min="0"></div>
+    <div class="setting-group"><label><div class="lb" style="border-color:#8b44ac;border-style:dashed;background-color:#fff0f8;"></div>條碼黏貼區</label><input type="number" id="time_purple" value="13" min="0"></div>
+    <div class="setting-group"><label><div class="lb" style="border-color:#2ecc71;border-style:dashed;"></div>分流相機區</label><input type="number" id="time_green" value="8" min="0"></div>
+    <div class="setting-group"><label><div class="lb" style="border-color:#e67e22;border-style:dashed;"></div>開/閉蓋作業區</label><input type="number" id="time_orange" value="10" min="0"></div>
+    <div class="setting-group"><label><div class="lb" style="border-color:#c0392b;background-color:#fff8f8;"></div>A槍注液區(2.5kg)</label><input type="number" id="time_A" value="10" min="0"></div>
+    <div class="setting-group"><label><div class="lb" style="border-color:#fff;"></div>A槍注液區(200kg)</label><input type="number" id="time_A_1" value="10" min="0"></div>
+    <div class="setting-group"><label><div class="lb" style="border-color:#5b00ae;background-color:#faf4ff;"></div>B槍注液區(2.5kg)</label><input type="number" id="time_B" value="10" min="0"></div>
+    <div class="setting-group"><label><div class="lb" style="border-color:#fff;"></div>B槍注液區(200kg)</label><input type="number" id="time_B_1" value="10" min="0"></div>
+    <div class="setting-group"><label><div class="lb" style="border-color:#2980b9;background-color:#f0f8ff;"></div>C槍注液區(2.5kg)</label><input type="number" id="time_C" value="10" min="0"></div>
+    <div class="setting-group"><label><div class="lb" style="border-color:#fff;"></div>C槍注液區(200kg)</label><input type="number" id="time_C_1" value="10" min="0"></div>
+    <div class="setting-group"><label><div class="lb" style="border-color:#dae9f8;border-style:dashed;background-color:#eef9ff;"></div>上洗區</label><input type="number" id="time_blue_top" value="10" min="0"></div>
+    <div class="setting-group"><label><div class="lb" style="border-color:#94dcf8;border-style:dashed;background-color:#eef9ff;"></div>側洗區</label><input type="number" id="time_blue_side" value="10" min="0"></div>
+    <div class="setting-group"><label><div class="lb" style="border-color:#0f9ed5;border-style:dashed;background-color:#eef9ff;"></div>底洗區</label><input type="number" id="time_blue_bottom" value="10" min="0"></div>
+    <div class="setting-group"><label><div class="lb" style="border-color:#7B5B1E;border-style:dashed;background-color:#fdf5e6;"></div>抽液區</label><input type="number" id="time_brown" value="10" min="0"></div>
+    <div class="setting-group"><label><div class="lb" style="border-color:#d63685;border-style:dashed;background-color:#fff0f8;"></div>成品等待區</label><input type="number" id="time_pink" value="13" min="0"></div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// CONFIGURATION & STATE (設定與系統狀態)
+// ================================================================
+
+// DwellTimes: 紀錄每個站點（單元格類型）的停留時間（秒）。
+// 這些時間會被動畫引擎用來決定球體在該格子要等待多久才能移動到下一格。
+const DwellTimes = {
+  rotate: 14, orange_dashed: 10, A_label: 10, B_label: 10, C_label: 10, A_label_200: 10, B_label_200: 10, C_label_200: 10,
+  blue_dashed_top: 10, blue_dashed_side1: 0, blue_dashed_side2: 10, blue_dashed_bottom: 10,
+  brown_dashed: 10, pink_dashed0: 0, pink_dashed: 13, purple_dashed0: 0, purple_dashed: 13,
+  green_dashed: 8, normal: 8, arrow_right: 8, arrow_left: 8, storage: 0
+};
+
+// inputMapping: 將 HTML 輸入框的 ID 字尾對應到 DwellTimes 物件的 key
+const inputMapping = {
+  'normal': 'normal', 'rotate': 'rotate', 'purple': 'purple_dashed',
+  'green': 'green_dashed', 'orange': 'orange_dashed', 'A': 'A_label',
+  'B': 'B_label', 'C': 'C_label', 'A_1': 'A_label_200', 'B_1': 'B_label_200', 'C_1': 'C_label_200',
+  'blue_top': 'blue_dashed_top', 'blue_side': 'blue_dashed_side2', 'blue_bottom': 'blue_dashed_bottom',
+  'brown': 'brown_dashed', 'pink': 'pink_dashed'
+};
+
+// 迴圈綁定事件：當使用者更改輸入框的值時，即時更新 DwellTimes 內的停留秒數
+Object.keys(inputMapping).forEach(prefix => {
+  const el = document.getElementById('time_' + prefix);
+  if(el) {
+    el.addEventListener('change', (e) => {
+      DwellTimes[inputMapping[prefix]] = Number(e.target.value);
+    });
+  }
+});
+
+// 全域系統變數
+let simSpeed = 1;     // 模擬速度倍率，由滑桿控制
+document.getElementById('inp_speed').addEventListener('input', (e) => {
+  simSpeed = Number(e.target.value);
+  document.getElementById('speed_disp').innerText = simSpeed + 'x';
+});
+
+let running = false;  // 系統是否正在運行中 (播放/暫停)
+let balls = [];       // 儲存所有桶子 (球體) 物件的陣列
+let lastTime = 0;     // 紀錄上一幀的時間 (用於計算幀間差距 dt)
+let rafId = null;     // requestAnimationFrame 的 ID (用來暫停或取消動畫)
+
+// ================================================================
+// MAP DATA & SETUP (地圖資料與初始化)
+// ================================================================
+const cvs = document.getElementById('cvs'); // 取得畫布元件
+const ctx = cvs.getContext('2d');           // 取得 2D 繪圖環境
+const CS = 32;                              // Cell Size (網格大小)：每個邏輯網格為 32x32 像素
+const OX = 26, OY = 26;                     // Offset X/Y (偏移量)：地圖繪製起始點，用來留白邊
+cvs.width  = OX + 20 * CS + 20;             // 設定畫布總寬度 (X軸網格最大約20)
+cvs.height = OY + 22 * CS + 22;             // 設定畫布總高度 (Y軸網格最大約22)
+
+const CELLS = {}; // 儲存所有具有特殊功能的網格。鍵值為 "x,y"，內容為類型字串
+// set 函數：用來快速定義特定座標 (x,y) 的網格類型 (t)，若未傳入則預設為 'normal'
+function set(x, y, t) { CELLS[`${x},${y}`] = t || 'normal'; }
+
+// 依照廠區佈局，逐欄 (x) 設定網格的類型
+//x=0
+set(0,0,'rotate'); set(0,1,'orange_dashed'); set(0,2,'A_label'); set(0,3,'orange_dashed');
+for (let y=4; y<=20; y++) set(0,y,'normal');
+set(0,21,'rotate');
+
+//x=1
+set(1,0,'normal'); set(1,4,'normal'); set(1,21,'normal');
+
+//x=2
+set(2,0,'rotate'); set(2,1,'orange_dashed'); set(2,2,'B_label'); set(2,3,'orange_dashed'); set(2,4,'rotate');
+for (let y=5; y<=20; y++) set(2,y,'normal');
+set(2,21,'rotate');
+
+//x=3
+set(3,0,'normal'); set(3,5,'normal'); set(3,21,'normal');
+
+//x=4
+set(4,0,'rotate'); set(4,1,'orange_dashed'); set(4,2,'C_label'); set(4,3,'orange_dashed'); set(4,4,'normal'); set(4,5,'rotate');
+for (let y=6; y<=20; y++) set(4,y,'normal');
+set(4,21,'rotate');
+
+//x=5
+set(5,0,'normal'); set(5,9,'normal'); set(5,21,'green_dashed');
+
+//x=6 (Wash 1)
+set(6,0,'rotate'); set(6,1,'normal'); set(6,2,'normal');
+set(6,3,'blue_dashed_top'); set(6,4,'blue_dashed_side1'); set(6,5,'blue_dashed_side2'); set(6,6,'blue_dashed_bottom');
+set(6,7,'normal'); set(6,8,'brown_dashed'); set(6,9,'rotate');
+for (let y=10; y<=20; y++) set(6,y,'normal');
+set(6,21,'rotate');
+
+//x=7
+set(7,0,'normal'); set(7,21,'normal');
+
+//x=8
+set(8,0,'normal'); set(8,21,'normal');
+
+//x=9 (Wash 2)
+set(9,0,'rotate'); set(9,1,'normal'); set(9,2,'normal');
+set(9,3,'blue_dashed_top'); set(9,4,'blue_dashed_side1'); set(9,5,'blue_dashed_side2'); set(9,6,'blue_dashed_bottom');
+set(9,7,'normal'); set(9,8,'brown_dashed'); set(9,9,'rotate');
+for (let y=10; y<=20; y++) set(9,y,'normal');
+set(9,21,'normal');
+
+//x=10
+set(10,0,'pink_dashed0'); set(10,21,'purple_dashed');
+
+//x=11
+set(11,0,'pink_dashed'); set(11,21,'purple_dashed0');
+
+//x=12
+set(12,0,'normal'); set(12,21,'normal');
+
+//x=13
+set(13,0,'normal'); set(13,21,'normal');
+
+//x=14
+set(14,0,'arrow_right'); set(14,21,'arrow_left');
+
+// Storage (x=15~19)
+for (let y=0; y<=21; y++) for (let x=15; x<=19; x++) set(x,y,'storage');
+
+// cc 函數 (Center Coordinates)：
+// 傳入邏輯網格 (x,y)，回傳畫布上的實際像素座標 [px, py] (取格子中心點)
+function cc(x,y) { return [OX + x*CS + CS/2, OY + y*CS + CS/2]; }
+
+// ================================================================
+// 演算法大腦：精準路由分流與防插隊防撞邏輯 (ALGORITHM LOGIC)
+// ================================================================
+
+// 取得出庫前的 Z 字型排列座標 (由下往上，由右至左排列)
+// 參數 idx: 球的初始陣列索引
+function getStorageCell(idx) {
+  let row = Math.floor(idx / 5); // 每排 5 個，算出是在第幾排
+  let colOffset = idx % 5;       // 算出在該排的第幾個位置
+  let y = 21 - row;              // Y 座標由底部 (21) 往上遞減
+  // 如果是偶數排，由左至右 (15起算)；奇數排由右至左 (19起算)，形成蛇行/Z字排列
+  let x = (row % 2 === 0) ? 15 + colOffset : 19 - colOffset;
+  return {x, y};
+}
+
+// 取得完成入庫後的 Z 字型排列座標 (由上往下，由右至左排列)
+// 參數 idx: 入庫後的陣列索引
+function getFinishedStorageCell(idx) {
+  let row = Math.floor(idx / 5);
+  let colOffset = idx % 5;
+  let y = row;                   // Y 座標由頂部 (0) 往下遞增
+  let x = (row % 2 === 0) ? 15 + colOffset : 19 - colOffset;
+  return {x, y};
+}
+
+// 檢查某個網格座標 (x,y) 是否被任何球體佔用 (包含正在移動前往該格的球)
+// 防撞核心：會同時檢查「停在該格的球」以及「正在移動並即將抵達該格的球」
+function getBallAt(x, y) {
+  return balls.find(b => {
+    // 正在移動中的球，視為已佔用它的「目標格子」
+    if (b.state === 'MOVING') return b.targetX === x && b.targetY === y;
+    // 停留在原地的球，視為佔用其「當前格子」
+    return b.x === x && b.y === y;
+  });
+}
+
+// 依照球體目前圈數與所在座標，決定實際要使用哪一種停留時間
+function getEffectiveCellTypeForDwell(b, cellType) {
+  // A 槍注液區位置：A(0,2)
+  // 條件：球體第 3 次經過 A 點時，使用 A_label_200 的秒數
+  // 注意：程式中 laps 是在抵達 A/B/C 點時才會 +1，
+  // 所以這裡判斷 b.laps === 3，代表它已經是第 3 次抵達該注液點。
+  if (b.type === 'A' && b.x === 0 && b.y === 2 && b.laps === 3) {
+    return 'A_label_200';
+  }
+
+  // B 槍注液區位置：B(2,2)
+  if (b.type === 'B' && b.x === 2 && b.y === 2 && b.laps === 3) {
+    return 'B_label_200';
+  }
+
+  // C 槍注液區位置：C(4,2)
+  // 目前你的程式主要是 A / B 兩種球，
+  // 如果之後有 C 桶，這段可以直接使用。
+  if (b.type === 'C' && b.x === 4 && b.y === 2 && b.laps === 3) {
+    return 'C_label_200';
+  }
+
+  return cellType;
+}
+
+// 核心導航函數：決定球體 (b) 的下一步該去哪裡 (回傳 {x, y} 或 null)
+function getNextCell(b) {
+  // 1. 出庫階段：如果球還在初始存放區內，依照順序遞補
+  if (b.storageIdx >= 0) {
+    if (b.storageIdx > 0) return getStorageCell(b.storageIdx - 1);
+    // storageIdx === 0 代表它是排頭，準備從 (14, 21) 進入產線底層
+    return {x: 14, y: 21}; 
+  }
+
+  // 2. 入庫階段：如果球已經跑完流程進入完成區，依序走到最終存放位置
+  if (b.finishedIdx >= 0) {
+    if (b.finishedIdx < b.targetStorageIdx) return getFinishedStorageCell(b.finishedIdx + 1);
+    return null; // 抵達終點目標位置，不再移動
+  }
+
+  let x = b.x, y = b.y;
+
+  // 判斷當前全域產品組合狀態 (單純A桶、單純B桶，或AB混合)
+  let countA = balls.filter(o => o.type === 'A').length;
+  let countB = balls.filter(o => o.type === 'B').length;
+  let isMixed = countA > 0 && countB > 0;
+  let onlyA = countA > 0 && countB === 0;
+  let onlyB = countA === 0 && countB > 0;
+
+  // ----------------------------------------------------------------
+  // 【防插隊機制：老鳥絕對禮讓菜鳥雷達】
+  // 目的：確保所有剛從倉庫出來的球 (laps === 0) 能完整排成一列。
+  // 作法：洗完一次澡的老鳥球到了 (6,20) 或 (9,20) 時，必須確認右邊的底層
+  //      運輸帶上「沒有任何菜鳥」才能降落到 y=21，否則原地罰站 (回傳 null)。
+  // ----------------------------------------------------------------
+  //////if (x === 9 && y === 20) {
+  //////  // 檢查是否有任何 laps === 0 的菜鳥球，狀態還在倉庫裡，或是已經在 y=21 且位置在 x>=10 
+  //////  let rookieIncoming = balls.some(o => o.laps === 0 && (o.storageIdx >= 0 || (o.y === 21 && o.x >= 10)));
+  //////  // 如果有菜鳥還沒通過，或是正下方的 (10,21) 被擋住，老鳥就罰站
+  //////  if (rookieIncoming || getBallAt(10, 21)) return null; 
+  //////}
+  //////if (x === 6 && y === 20) {
+  //////  // 同理，x=6 的洗淨出口要等所有 x>=7 的菜鳥通過
+  //////  let rookieIncoming = balls.some(o => o.laps === 0 && (o.storageIdx >= 0 || (o.y === 21 && o.x >= 7)));
+  //////  if (rookieIncoming || getBallAt(7, 21)) return null; 
+  //////}
+  // 【修正版：防撞與匯流機制】
+  // 不再等待倉庫淨空，只檢查右側準備通過的底層運輸帶是否有球
+  if (x === 9 && y === 20) {
+    if (getBallAt(10, 21) || getBallAt(11, 21)) return null; 
+  }
+  ///////////////if (x === 6 && y === 20) { //-------------
+  ///////////////  if (getBallAt(7, 21) || getBallAt(8, 21)) return null; 
+  ///////////////}
+
+
+  // ----------------------------------------------------------------
+  // 以下為常規路徑規劃 (Routing)
+  // ----------------------------------------------------------------
+
+  // 1. 底層運輸區 (y=21, 往左行) 與 向上分流判斷
+  ///////if (y === 21 && x > 0 && x <= 14) {
+  ///////  if (onlyA && b.type === 'A') {
+  ///////    // 若只有 A 桶，A 桶會貪食蛇式填滿 x=4, x=2, x=0 三條上行管線
+  ///////    if (x === 4 && getBallAt(3, 21)) return {x: 4, y: 20}; 
+  ///////    if (x === 2 && getBallAt(1, 21)) return {x: 2, y: 20}; 
+  ///////    if (x === 0) return {x: 0, y: 20}; 
+  ///////  } else if (onlyB && b.type === 'B') {
+  ///////    // 若只有 B 桶，B 桶填滿 x=4, x=2 兩條管線
+  ///////    if (x === 4 && getBallAt(3, 21)) return {x: 4, y: 20};
+  ///////    if (x === 2) return {x: 2, y: 20};
+  ///////  } else if (isMixed) {
+  ///////    // 雙桶混合模式：A 嚴格只走 x=0；B 走 x=2，滿了溢出到 x=4
+  ///////    if (b.type === 'A' && x === 0) return {x: 0, y: 20}; 
+  ///////    if (b.type === 'B') {
+  ///////      if (x === 4 && getBallAt(3, 21)) return {x: 4, y: 20}; 
+  ///////      if (x === 2) return {x: 2, y: 20}; 
+  ///////    }
+  ///////  }
+  ///////  return {x: x - 1, y: 21}; // 繼續往左推進
+  ///////}
+  // 1. 底層運輸區 (y=21, 往左行) 與 向上分流判斷
+  if (y === 21 && x > 0 && x <= 14) {
+    if (onlyA && b.type === 'A') {
+	  //if (x === 6 && getBallAt(5, 21)) return {x: 6, y: 20}; //=========
+      if (x === 4 && getBallAt(3, 21)) return {x: 4, y: 20}; 
+      if (x === 2 && getBallAt(1, 21)) return {x: 2, y: 20}; 
+      if (x === 0) return {x: 0, y: 20}; 
+    } else if (onlyB && b.type === 'B') {
+      if (x === 4 && (getBallAt(3, 21) || getBallAt(2, 21) || getBallAt(2, 20))) return {x: 4, y: 20};
+      if (x === 2) return {x: 2, y: 20};
+    } else if (isMixed) {
+      if (b.type === 'A' && x === 0) return {x: 0, y: 20}; 
+      if (b.type === 'B') {
+        // 【Pro級修復 1】防堵塞溢流：當 2 號管底部有球，提早讓 B桶轉入 4 號管，淨空底層！
+        if (x === 4 && (getBallAt(3, 21) || getBallAt(2, 21) || getBallAt(2, 20))) return {x: 4, y: 20}; 
+        if (x === 2) return {x: 2, y: 20}; 
+      }
+    }
+    return {x: x - 1, y: 21}; // 繼續往左推進
+  }
+
+  // 2. 爬升與連通管匯流路線 (上行)
+  // 路線 C (x=4) 往上走，到了 y=5 轉彎匯入 x=2
+  /////////if (x === 4 && y > 5 && y <= 20) return {x: 4, y: y - 1};
+  /////////if (x === 4 && y === 5) return {x: 3, y: 5};
+  /////////if (x === 3 && y === 5) return {x: 2, y: 5}; 
+  /////////
+  /////////// 路線 B (x=2) 往上走
+  /////////if (x === 2 && y > 4 && y <= 20) return {x: 2, y: y - 1};
+  /////////// 在 (2,4) 這個節點，單桶極限模式下的 A 桶會透過橫向連通管轉移到 x=0
+  /////////if (x === 2 && y === 4) {
+  /////////  if (b.type === 'A') return {x: 1, y: 4}; 
+  /////////  return {x: 2, y: 3}; // B桶則繼續直上
+  /////////}
+  /////////if (x === 1 && y === 4) return {x: 0, y: 4};
+  /////////if (x === 2 && y > 1 && y <= 3) return {x: 2, y: y - 1};
+  ///////////////if (x === 2 && y === 1) return {x: 2, y: 0}; // 進入頂部
+  ///////////////
+  ///////////////// 主幹線 A (x=0) 往上走
+  ///////////////if (x === 0 && y > 0 && y <= 21) return {x: 0, y: y - 1};
+  /////////
+  /////////// 路線 B (x=2) 往上走
+  /////////if (x === 2 && y > 1 && y <= 3) return {x: 2, y: y - 1};
+  /////////if (x === 2 && y === 1) {
+  /////////  // 【嚴格限制】：若洗淨區 x=6 已滿或入口塞車，(2,1) 原地等待不進入頂部
+  /////////  if (getBallAt(6, 1) || getBallAt(6, 0)) return null; 
+  /////////  return {x: 2, y: 0}; // 進入頂部
+  /////////}
+  // 2. 爬升與連通管匯流路線 (上行)
+
+  //if (x === 6 && y > 9 && y <= 20) return {x: 6, y: y - 1};//---------
+  //if (x === 6 && y === 9) return {x: 5, y: 9};//------------------
+  //if (x === 5 && y === 9) return {x: 4, y: 9};//----------------
+
+  // 路線 C (x=4) 往上走，到了 y=5 轉彎匯入 x=2
+  if (x === 4 && y > 5 && y <= 20) return {x: 4, y: y - 1};
+  if (x === 4 && y === 5) return {x: 3, y: 5};
+  if (x === 3 && y === 5) return {x: 2, y: 5}; 
+
+  // 路線 B (x=2) 往上走
+  if (x === 2 && y > 4 && y <= 20) return {x: 2, y: y - 1};
+  if (x === 2 && y === 4) {
+    if (b.type === 'A') return {x: 1, y: 4}; 
+    return {x: 2, y: 3}; 
+  }
+  if (x === 1 && y === 4) return {x: 0, y: 4};
+  if (x === 2 && y > 1 && y <= 3) return {x: 2, y: y - 1};
+  if (x === 2 && y === 1) {
+    // B 桶目標是 x=6，若滿載則原地等待
+    if (getBallAt(6, 1) || getBallAt(6, 0)) return null; 
+    return {x: 2, y: 0}; 
+  }
+
+  // 主幹線 A (x=0) 往上走
+  if (x === 0 && y > 1 && y <= 21) return {x: 0, y: y - 1};
+  if (x === 0 && y === 1) {
+    // 【Pro級修復 2】A桶頂部紅綠燈：目標 x=9 若客滿，乖乖在下層排隊，不准佔用頂部通道！
+    if (getBallAt(9, 1) || getBallAt(9, 0)) return null;
+    return {x: 0, y: 0};
+  }
+
+  // 主幹線 A (x=0) 往上走
+  // 同理，若要讓 (0,1) 也遵守此規則，將條件拆分如下：
+  if (x === 0 && y > 1 && y <= 21) return {x: 0, y: y - 1};
+  if (x === 0 && y === 1) {
+    if (getBallAt(6, 1) || getBallAt(6, 0)) return null;
+    return {x: 0, y: 0};
+  }
+  
+
+  // 3. 頂部運輸區 (y=0, 往右行) 與 洗淨區下降分流
+  if (y === 0 && x >= 0 && x < 14) {
+    // 檢查是否還有任何 A 桶尚未完成循環並進入成品區 (防混桶核心機制)
+    let aNotAllDone = balls.some(o => o.type === 'A' && o.finishedIdx === -1);
+    
+    // 如果球還沒繞完 3 圈 (laps < 3)，就必須下放去洗淨區
+    if (b.laps < 3) {
+      if (onlyA && x === 9) return {x: 9, y: 1};
+      if (onlyB && x === 9) return {x: 9, y: 1}; // 單桶最佳化，統一去 x=9 洗淨
+      
+      if (isMixed) {
+        if (b.type === 'A' && x === 9) return {x: 9, y: 1}; // 混合時 A 統一去 x=9
+        // 混合時 B 嚴格去 x=6。若此時 A 桶還沒全部進 storage，B 桶就算滿 3 圈也會被強制送去 x=6 無限洗澡，避免 A/B 混桶入庫！
+        if (b.type === 'B' && x === 6) return {x: 6, y: 1}; 
+      }
+    } else {
+      // 已經滿 3 圈的情況下，如果還有 A 桶沒入庫，B 桶強制去 x=6 洗澡
+      //if (isMixed && b.type === 'B' && aNotAllDone && x === 6) return {x: 6, y: 1};
+    }
+    
+    return {x: x + 1, y: 0}; // 繼續往右推進
+  }
+
+  // 4. 清洗區下降路徑 (x=6 或 x=9，往下行)
+  if (x === 6 && y > 0 && y < 21) return {x: 6, y: y + 1};
+  if (x === 9 && y > 0 && y < 21) return {x: 9, y: y + 1};
+
+  // 5. 準備入庫 (x=14, y=0)
+  if (y === 0 && x === 14) return {x: 15, y: 0};
+
+  return null; // 無路可走或發生異常
+}
+
+
+// ================================================================
+// 系統引擎與動畫迴圈 (SYSTEM ENGINE)
+// ================================================================
+
+// 初始化生成球體 (桶子)
+// countA: A 桶數量, countB: B 桶數量
+function generateBalls(countA, countB) {
+  balls = [];
+  let total = countA + countB;
+  
+  for(let i = 0; i < total; i++) {
+    // 前面先產生 A 桶，後面產生 B 桶
+    let type = i < countA ? 'A' : 'B';
+    // ID 各自從 1 開始編號
+    let id = i < countA ? i + 1 : i - countA + 1;
+    
+    let pos = getStorageCell(i);
+    let center = cc(pos.x, pos.y);
+    balls.push({
+      type: type,
+      id: id,        
+      x: pos.x, y: pos.y,             // 邏輯上的網格座標
+      px: center[0], py: center[1],   // 畫布上的實際像素座標
+      state: 'DWELLING',              // 狀態機: DWELLING(停留倒數), WAITING(等待前進), MOVING(正在移動)
+      dwellTimer: 0,                  // 倒數計時器
+      laps: 0,                        // 記錄已完成的圈數
+      washCount: 0,                   // 記錄經過洗淨區的次數 (用於畫布亮燈)
+      storageIdx: i,                  // 出庫前的陣列索引 (-1 代表已出庫)
+      finishedIdx: -1,                // 入庫後的陣列索引
+      targetStorageIdx: -1,           // 入庫後應該到達的目標位置
+      targetX: -1, targetY: -1,       // 移動目標網格座標
+      srcPx: 0, srcPy: 0, tgtPx: 0, tgtPy: 0, // 動畫起訖像素座標
+      animProg: 0                     // 動畫進度 (0.0 ~ 1.0)
+    });
+  }
+}
+
+// 嚴格淨空區清單：在這些座標區域，為防止死結或碰撞，規定球與球之間必須保持距離，
+// 前方格子就算空了，還得確定「前方的前方」沒有塞車才能前進。
+const restrictedCells = [
+  "0,0", "2,0", "4,0", "6,0", "9,0",
+  "0,21", "2,21", "4,21", "6,21", "8,21", "9,21",
+  "6,2", "6,3", "6,4", "6,5", "6,6", "6,7",
+  "9,2", "9,3", "9,4", "9,5", "9,6", "9,7",
+  "10,0", "11,21"
+];
+
+// 核心動畫更新迴圈 (由 requestAnimationFrame 不斷呼叫)
+function update(time) {
+  if (!lastTime) lastTime = time;
+  lastTime = time; // 我們不再需要真實時間差，但保留給系統紀錄
+
+  //定義絕對固定的時間步長 (模擬 60 FPS 的微小推進)
+  let dt = 1 / 60; 
+
+  if (running) {
+    //將倍速轉換為「邏輯迴圈執行次數」
+    // 如果 simSpeed 是 10，我們就在畫一次圖之前，把世界推進 10 次 1/60 秒
+    let steps = Math.round(simSpeed); 
+
+    for (let s = 0; s < steps; s++) {
+      // ---------------------------------------------------------
+      // 以下為原本的邏輯，全部包進這個 for 迴圈裡
+      // ---------------------------------------------------------
+      
+      balls.sort((a,b) => {
+        if (b.laps !== a.laps) return b.laps - a.laps; 
+        return a.id - b.id; 
+      });
+
+      for (let b of balls) {
+        if (b.state === 'DONE') continue; // 已經完美入庫的球跳過處理
+
+        let next = getNextCell(b); // 取得下一步座標
+        let isBlocked = false;     // 前方是否被阻擋的旗標
+
+        // --- 1. 碰撞偵測：檢查前方道路是否阻塞 ---
+        if (next) {
+          let occupant = getBallAt(next.x, next.y);
+          if (occupant) {
+            isBlocked = true;
+          // 【骨牌推擠例外】：當球準備進入「已完成」區 (14,0 -> 15,0) 時，
+          // 允許無視佔用狀態，強制「推擠」前方已經完成的球往後退
+            if (occupant.finishedIdx >= 0 && occupant.state === 'DONE' &&
+                b.x === 14 && b.y === 0 && next.x === 15 && next.y === 0) {
+              isBlocked = false;
+            }
+          } else {
+          // 預視邏輯：如果即將進入「嚴格淨空區」
+            if (restrictedCells.includes(`${next.x},${next.y}`)) {
+              let origX = b.x, origY = b.y;
+              b.x = next.x; b.y = next.y; // 先虛擬往前走一步
+              let nextNext = getNextCell(b); // 看下一步的下一步
+              b.x = origX; b.y = origY;   // 復原座標 
+			  
+			  // 若前方的前方有人，提早煞車，視為阻擋
+              if (nextNext && getBallAt(nextNext.x, nextNext.y)) {
+                isBlocked = true; 
+              }
+            }
+          }
+        }
+
+        // --- 2. 狀態機處理：停留倒數 (DWELLING) ---
+        if (b.state === 'DWELLING') {
+          if (!isBlocked) { 
+            // b.dwellTimer -= dt * simSpeed;  刪掉 * simSpeed！
+            // 因為迴圈已經幫我們執行了 simSpeed 次，這裡只要單純扣除 dt 即可
+            b.dwellTimer -= dt; 
+            if (b.dwellTimer <= 0) {
+              b.state = 'WAITING';  // 作業時間結束，切換為「等待起步」
+            }
+          }
+        }
+
+        // --- 3. 狀態機處理：等待起步 (WAITING) ---
+        if (b.state === 'WAITING') {
+          if (!isBlocked && next) {
+            let occupant = getBallAt(next.x, next.y);
+			
+			// 觸發骨牌推擠 (FIFO 入庫)
+            if (occupant && occupant.finishedIdx >= 0 && occupant.state === 'DONE' &&
+                b.x === 14 && b.y === 0 && next.x === 15 && next.y === 0) {
+              balls.forEach(other => {
+			    // 將所有已經在倉庫裡的球目標位置往後推移 (加一)，並喚醒它們移動
+                if (other.finishedIdx >= 0) {
+                  other.targetStorageIdx++;
+                  other.state = 'WAITING';
+                }
+              });
+              continue;  // 推擠發生時，這一回合讓被推的球先動，自己先不動
+            }
+			
+			// 確定沒人擋路，設定平滑移動 (Lerp) 的起訖點參數
+            if (!occupant) {
+              b.targetX = next.x; b.targetY = next.y;
+              let center = cc(next.x, next.y);
+              b.srcPx = b.px; b.srcPy = b.py;     // 像素起點
+              b.tgtPx = center[0]; b.tgtPy = center[1]; // 像素終點
+              b.animProg = 0;                     // 進度歸零                     
+              b.state = 'MOVING';                 // 切換狀態為「移動中」
+            }
+          }
+        }
+
+        // --- 4. 狀態機處理：平滑移動中 (MOVING) ---
+        if (b.state === 'MOVING') {
+          // let moveTime = 0.4 / simSpeed;刪掉 / simSpeed！
+          // 移動時間回歸絕對物理時間
+          let moveTime = 0.4; 
+          b.animProg += dt / moveTime;  // 累加動畫進度比例
+          if (b.animProg >= 1) b.animProg = 1;
+
+          // 線性插值 (Linear Interpolation) 計算當下的像素 X, Y
+          b.px = b.srcPx + (b.tgtPx - b.srcPx) * b.animProg;
+          b.py = b.srcPy + (b.tgtPy - b.srcPy) * b.animProg;
+
+          // 動畫進度滿 1 (已抵達下一格的中心點)
+          if (b.animProg >= 1) { 
+            b.x = b.targetX; b.y = b.targetY; 
+            b.targetX = -1; b.targetY = -1;
+
+            // 事件觸發：若到達特定位置，增加跑完的圈數 (Laps)
+            if (b.type === 'A' && b.x === 0 && b.y === 2) b.laps++;
+            if (b.type === 'B' && b.x === 2 && b.y === 2) b.laps++;
+			
+          // 事件觸發：若經過清洗區底部，增加清洗次數 (WashCount)
+            if (b.type === 'A' && (b.x === 6 || b.x === 9) && b.y === 6) b.washCount++;
+            if (b.type === 'B' && (b.x === 6 || b.x === 9) && b.y === 6) b.washCount++;
+
+          // 更新出庫狀態
+            if (b.storageIdx >= 0) {
+              if (b.x === 14 && b.y === 21) b.storageIdx = -1;  // 正式離開儲存區
+              else b.storageIdx--;
+            }
+
+          // 更新入庫狀態
+            if (b.x === 15 && b.y === 0 && b.finishedIdx === -1) {
+              b.finishedIdx = 0;
+              b.targetStorageIdx = 0;  // 新入庫的球永遠排在 0 號位
+            } else if (b.finishedIdx >= 0 && b.finishedIdx < b.targetStorageIdx) {
+              b.finishedIdx++;  // 持續推移直到到達 targetStorageIdx
+            }
+
+          // 判斷是否已經抵達最終休眠位置
+            if (b.finishedIdx >= 0 && b.finishedIdx === b.targetStorageIdx) {
+              b.state = 'DONE';
+            } else {
+            // 還沒結束流程，依照現在所在格子的類型，載入該站點的停留時間，進入 DWELLING
+              b.state = 'DWELLING';
+			  let cellType = CELLS[`${b.x},${b.y}`] || 'normal';
+			  if (cellType.startsWith('arrow')) {
+			  cellType = 'normal';
+			  }
+			  // 依照球體目前圈數與所在位置，決定是否要改用 200kg 注液時間
+			  cellType = getEffectiveCellTypeForDwell(b, cellType);
+			  let t = DwellTimes[cellType] !== undefined ? DwellTimes[cellType] : 8;
+			  b.dwellTimer = t;
+            }
+          }
+        }
+      }
+      // ---------------------------------------------------------
+      // 邏輯迴圈結束
+      // ---------------------------------------------------------
+    }
+  }
+
+  // 所有的邏輯（不管跑了幾次）都算完之後，才畫圖
+  // 清除並重繪畫面
+  drawMap();
+  drawBalls();
+
+  // 更新 HTML 上的狀態看板文字  
+  if (running) {
+    let completed = balls.filter(b => b.state === 'DONE' && b.finishedIdx >= 0).length;
+    document.getElementById('status_board').innerHTML = 
+      `運行中... 總數: ${balls.length} | 已入庫: <span style="color:var(--primary);font-weight:bold;">${completed}</span>`;
+  }
+
+  // 遞迴呼叫下一幀，維持動畫執行
+  rafId = requestAnimationFrame(update);
+}
+
+// ================================================================
+// DRAWING
+// ================================================================
+
+// 繪製矩形的輔助函數
+// 參數: x, y, 寬度, 高度, 填滿顏色, 邊框顏色, 邊框粗細, 虛線樣式陣列
+function drawRect(x,y,w,h,fill,stroke,lw,dash) {
+  ctx.fillStyle=fill; ctx.fillRect(x,y,w,h);
+  if(stroke) {
+    ctx.strokeStyle=stroke; ctx.lineWidth=lw||1;
+    ctx.setLineDash(dash||[]);
+    ctx.strokeRect(x+0.5, y+0.5, w-1, h-1); // +0.5 用於 Canvas 抗鋸齒修正，讓線條更銳利
+    ctx.setLineDash([]);
+  }
+}
+
+// 繪製虛線特殊站點的輔助函數
+function drawDashedCell(x, y, border, bg) {
+  let p = [OX + x*CS, OY + y*CS];
+  drawRect(p[0], p[1], CS, CS, bg, '#bbb', 0.5); // 畫底色和淺色實心邊框
+  ctx.strokeStyle = border; ctx.lineWidth = 2;
+  ctx.setLineDash([4,3]); // 4px 線段, 3px 空白
+  ctx.strokeRect(p[0]+3, p[1]+3, CS-6, CS-6); // 內縮 3px 畫虛線框
+  ctx.setLineDash([]);
+}
+
+// 繪製靜態地圖
+function drawMap() {
+  ctx.clearRect(0,0,cvs.width,cvs.height); // 清空畫布
+
+  // 遍歷所有已註冊的單元格，畫出底色和邊框  
+  for (let key in CELLS) {
+    let [x, y] = key.split(',').map(Number);
+    let px = OX + x*CS, py = OY + y*CS;
+    let t = CELLS[key];
+
+    // 預設打底    
+    drawRect(px, py, CS, CS, '#fff', '#eee', 1);
+
+    // 根據網格類型上色
+    if (t === 'storage') drawRect(px, py, CS, CS, '#fffce8', '#e8a020', 1);
+    else if (t === 'normal' || t.startsWith('arrow')) drawRect(px, py, CS, CS, '#ffffff', '#555', 1);
+    else if (t === 'rotate') {
+	  // 旋轉區畫一個內切虛線圓
+      drawRect(px, py, CS, CS, '#ffffff', '#555', 0.7);
+      ctx.beginPath(); ctx.arc(px+CS/2, py+CS/2, CS/2-5, 0, Math.PI*2);
+      ctx.strokeStyle='#aaa'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]); ctx.stroke(); ctx.setLineDash([]);
+    } else {
+      // 其他作業站點的配色與樣式設定
+      let bd, bg;
+      if(t==='A_label') {bd='#c0392b'; bg='#fff8f8';}
+      else if(t==='B_label') {bd='#5b00ae'; bg='#faf4ff';}
+      else if(t==='C_label') {bd='#2980b9'; bg='#f0f8ff';}
+      else if(t==='orange_dashed') {bd='#e67e22'; bg='#fffbe6';}
+      else if(t==='blue_dashed_top') { drawDashedCell(x,y,'#dae9f8','#eef9ff'); continue; }
+      else if(t==='blue_dashed_side1') { drawDashedCell(x,y,'#94dcf8','#eef9ff'); continue; }
+      else if(t==='blue_dashed_side2') { drawDashedCell(x,y,'#94dcf8','#eef9ff'); continue; }
+      else if(t==='blue_dashed_bottom') { drawDashedCell(x,y,'#0f9ed5','#eef9ff'); continue; }
+      else if(t==='brown_dashed') {bd='#7B5B1E'; bg='#fdf5e6';}
+      else if(t==='pink_dashed') {bd='#d63685'; bg='#fff0f8';}
+      else if(t==='purple_dashed') {bd='#8B44AC'; bg='#faf0ff';}
+      else if(t==='green_dashed') {bd='#2ecc71'; bg='#f0fff4';}
+
+      drawRect(px, py, CS, CS, bg, '#bbb', 0.5);
+      if(t.includes('label')) {
+        // 注液區繪製實心框與字母
+        drawRect(px+2, py+2, CS-4, CS-4, 'transparent', bd, 2.5);
+        ctx.fillStyle=bd; ctx.font='bold 15px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(t.charAt(0), px+CS/2, py+CS/2);
+      } else {
+        // 繪製內縮虛線框
+        drawRect(px+3, py+3, CS-6, CS-6, 'transparent', bd, 2, [4,3]);
+      }
+    }
+
+    // 繪製方向箭頭    
+    if (t==='arrow_right' || t==='arrow_left') {
+      ctx.fillStyle='#cc44aa'; ctx.font='bold 17px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(t==='arrow_right'?'→':'←', px+CS/2, py+CS/2);
+    }
+  }
+
+  // 雙格合併的成品等待區 (10,0) (11,0)
+  drawRect(OX + 10 * CS, OY, CS * 2, CS, '#fff0f8', '#bbb', 0.5);
+  drawRect(OX + 10 * CS + 3, OY + 3, CS * 2 - 6, CS - 6, 'transparent', '#d63685', 2, [4, 3]);
+  
+  // 雙格合併的條碼黏貼區 (10,21) (11,21)
+  drawRect(OX + 10 * CS, OY + 21 * CS, CS * 2, CS, '#fff0f8', '#bbb', 0.5);
+  drawRect(OX + 10 * CS + 3, OY + 21 * CS + 3, CS * 2 - 6, CS - 6, 'transparent', '#8B44AC', 2, [4, 3]);
+  
+  // 雙格合併的側洗區 (6,4) (6,5)
+  drawRect(OX + 6 * CS, OY + 4 * CS, CS, CS * 2, '#eef9ff', '#bbb', 0.5);
+  drawRect(OX + 6 * CS + 3, OY + 4 * CS + 3, CS - 6, CS * 2 - 6, 'transparent', '#94dcf8', 2, [4, 3]);
+  
+  // 雙格合併的側洗區 (9,4) (9,5)
+  drawRect(OX + 9 * CS, OY + 4 * CS, CS, CS * 2, '#eef9ff', '#bbb', 0.5);
+  drawRect(OX + 9 * CS + 3, OY + 4 * CS + 3, CS - 6, CS * 2 - 6, 'transparent', '#94dcf8', 2, [4, 3]);
+  
+  // 牆線(12,0)→(12,21)
+  ctx.beginPath();
+  ctx.strokeStyle="#8b8b8b";
+  ctx.lineWidth=0.5; 
+  //ctx.lineCap = "round"; 
+  //ctx.setLineDash([0, 10]); 
+  ctx.moveTo(OX+12*CS, OY-0.5*CS); 
+  ctx.lineTo(OX+12*CS, OY+22.5*CS); 
+  ctx.stroke(); 
+  ctx.setLineDash([]); 
+  //ctx.lineWidth=0.5; 
+  ctx.stroke();
+  ctx.moveTo(OX+12.1*CS, OY-0.5*CS); 
+  ctx.lineTo(OX+12.1*CS, OY+22.5*CS); 
+  ctx.stroke(); 
+  ctx.setLineDash([]);  
+  ctx.stroke();   
+  
+  // Storage 框線
+  ctx.strokeStyle='#e8a020'; ctx.lineWidth=2.5;
+  ctx.strokeRect(OX+15*CS+0.5, OY+0.5, 5*CS-1, 22*CS-1);
+}
+
+// 繪製動態球體
+function drawBalls() {
+  for (let b of balls) {
+    ctx.beginPath();
+    ctx.arc(b.px, b.py, 13, 0, Math.PI*2); // 球體半徑 13px
+
+    // 依據球體類型上色 (B桶紫色系，A桶紅色系)
+    if (b.type === 'B') {
+      ctx.fillStyle = '#e49edd';
+      ctx.strokeStyle = '#a02b93';
+    } else {
+      ctx.fillStyle = '#ffd6d6';
+      ctx.strokeStyle = '#c64c40';
+    }
+    
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // 畫球體中央的 ID 數字
+    ctx.fillStyle = (b.type === 'B' ? '#a02b93' : '#c64c40');
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(b.id, b.px, b.py);
+
+    // 繪製狀態指示燈 (僅限出庫後的球)
+    if (b.storageIdx === -1) {
+	  // 繪製圈數燈號 (上排 3 顆小圓點)
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.arc(b.px - 7 + i*7, b.py + 13 + 4, 2.5, 0, Math.PI*2);
+		// 不同圈數有不同的漸進顏色，滿圈顯示綠色 (#00b050)
+        let lapColors = b.type === 'B' ? ['#f1ceee', '#e49edd', '#00b050'] : ['#ff7c80', '#c64c40', '#00b050'];
+        ctx.fillStyle = i < b.laps ? lapColors[i] : '#cbd5e0'; // 未達到的圈數顯示灰色
+        ctx.fill();
+      }
+
+      // 繪製清洗次數燈號 (下排 2 顆小圓點)
+      for (let i = 0; i < 2; i++) {
+        ctx.beginPath();
+        ctx.arc(b.px - 3.5 + i*7, b.py + 13 + 10, 2.5, 0, Math.PI*2);
+        ctx.fillStyle = i < b.washCount ? '#4ab8d8' : '#cbd5e0'; // 洗過亮藍色，沒洗過灰階
+        ctx.fill();
+      }
+    }
+  }
+}
+
+// ================================================================
+// UI BINDINGS (使用者介面事件綁定)
+// ================================================================
+
+// 重置/生成按鈕事件
+document.getElementById('btn_generate').addEventListener('click', () => {
+  let countA = Number(document.getElementById('inp_count_A').value);
+  let countB = Number(document.getElementById('inp_count_B').value);
+  
+  //if(countA < 0) countA = 0; if(countA > 77) countA = 77;
+  //if(countB < 0) countB = 0; if(countB > 58) countB = 58;
+  
+  // 確保總和不為零
+  if(countA + countB === 0) countA = 1; 
+  
+  // 更新 UI 顯示值
+  document.getElementById('inp_count_A').value = countA;
+  document.getElementById('inp_count_B').value = countB;
+  
+  // 重置速度
+  simSpeed = 1;
+  document.getElementById('inp_speed').value = 1;
+  document.getElementById('speed_disp').innerText = '1x';
+  
+  // 停止運行並解鎖開始按鈕
+  running = false;
+  document.getElementById('btn_start').disabled = false;
+  document.getElementById('btn_start').innerText = '▶ 開始運行';
+  document.getElementById('status_board').innerText = `已生成 A桶: ${countA} 顆, B桶: ${countB} 顆！請點擊開始。`;
+  
+  // 產生球體並繪製第一幀畫面
+  generateBalls(countA, countB);
+  drawMap();
+  drawBalls();
+});
+
+// 開始運行/暫停運行按鈕事件
+document.getElementById('btn_start').addEventListener('click', () => {
+  if(balls.length === 0) return; // 沒產生物件就不動作
+  running = !running; // 切換狀態
+  
+  if(running) {
+    // 運行中樣式
+    document.getElementById('btn_start').innerText = '⏸ 暫停運行';
+    document.getElementById('btn_start').style.background = '#e67e22'; // 橘色警告色
+  } else {
+    // 暫停時樣式
+    document.getElementById('btn_start').innerText = '▶ 繼續運行';
+    document.getElementById('btn_start').style.background = 'var(--primary)';
+    document.getElementById('status_board').innerText = '系統已暫停。';
+  }
+});
+
+// 頁面載入時先繪製一次空地圖並啟動背景迴圈
+drawMap();
+rafId = requestAnimationFrame(update);
+</script>
+</body>
+</html>
